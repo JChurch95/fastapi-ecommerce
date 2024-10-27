@@ -3,9 +3,10 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Field, Session, select, SQLModel
-from db import get_session
-from models.Categories import Category
-from models.Products import Product
+from db import get_session, init_db
+from models.categories import Category
+from models.subcategories import SubCategory
+from models.products import Product
 
 app = FastAPI()
 
@@ -35,11 +36,22 @@ def root():
 
 # Create
 def create_generic(model):
-    def create(item: SQLModel, session: Session = Depends(get_session)):
-        session.add(item)
-        session.commit()
-        session.refresh(item)
-        return item
+    def create(item: model, session: Session = Depends(get_session)):
+        try:
+            # Exclude id field from the input data
+            data = item.model_dump(exclude={'id'})
+            db_item = model(**data)
+            session.add(db_item)
+            session.commit()
+            session.refresh(db_item)
+            return db_item
+        except Exception as e:
+            session.rollback()
+            print(f"Error creating {model.__name__}: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error creating {model.__name__}: {str(e)}"
+            )
     return create
 
 # Read
@@ -50,10 +62,10 @@ def read_generic(model):
 
 # Update
 def update_generic(model):
-    def update(item_id: int, item: SQLModel, session: Session = Depends(get_session)):
+    def update(item_id: int, item: model, session: Session = Depends(get_session)):
         db_item = session.get(model, item_id)
         if db_item:
-            item_data = item.model_dump(exclude_unset=True)
+            item_data = item.model_dump(exclude={'id'}, exclude_unset=True)
             for key, value in item_data.items():
                 setattr(db_item, key, value)
             session.add(db_item)
@@ -76,7 +88,11 @@ def delete_generic(model):
 @app.get("/api/products/")
 async def get_products(category: str, db: Session = Depends(get_session)):
     try:
-        query = select(Product, Category).join(Category, Product.subcategory_id == Category.id).where(Category.name.ilike(f"%{category}%"))
+        query = select(Product, SubCategory, Category).join(
+            SubCategory, Product.subcategory_id == SubCategory.id
+        ).join(
+            Category, SubCategory.category_id == Category.id
+        ).where(Category.name.ilike(f"%{category}%"))
         
         results = db.exec(query).all()
         
@@ -91,8 +107,9 @@ async def get_products(category: str, db: Session = Depends(get_session)):
             "image_url": product.image_url,
             "rating_value": product.rating_value,
             "rating_count": product.rating_count,
-            "category_name": category.name
-        } for product, category in results]
+            "category_name": category.name,
+            "subcategory_name": subcategory.name
+        } for product, subcategory, category in results]
     except Exception as e:
         print(f"Error in get_products: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
@@ -102,9 +119,26 @@ async def get_categories(db: Session = Depends(get_session)):
     try:
         query = select(Category)
         results = db.exec(query).all()
-        return [{"name": category.name} for category in results]
+        return [{"id": category.id, "name": category.name, "emoji": category.emoji} for category in results]
     except Exception as e:
         print(f"Error in get_categories: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.get("/api/subcategories/")
+async def get_subcategories(category_id: int = None, db: Session = Depends(get_session)):
+    try:
+        query = select(SubCategory, Category).join(Category, SubCategory.category_id == Category.id)
+        if category_id:
+            query = query.where(SubCategory.category_id == category_id)
+        results = db.exec(query).all()
+        return [{
+            "id": subcategory.id,
+            "name": subcategory.name,
+            "category_id": subcategory.category_id,
+            "category_name": category.name
+        } for subcategory, category in results]
+    except Exception as e:
+        print(f"Error in get_subcategories: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 # Categories CRUD
@@ -113,11 +147,22 @@ app.get("/categories/{item_id}")(read_generic(Category))
 app.put("/categories/{item_id}")(update_generic(Category))
 app.delete("/categories/{item_id}")(delete_generic(Category))
 
+# Subcategories CRUD
+app.post("/subcategories/")(create_generic(SubCategory))
+app.get("/subcategories/{item_id}")(read_generic(SubCategory))
+app.put("/subcategories/{item_id}")(update_generic(SubCategory))
+app.delete("/subcategories/{item_id}")(delete_generic(SubCategory))
+
 # Products CRUD
 app.post("/products/")(create_generic(Product))
 app.get("/products/{item_id}")(read_generic(Product))
 app.put("/products/{item_id}")(update_generic(Product))
 app.delete("/products/{item_id}")(delete_generic(Product))
+
+# Initialize database
+@app.on_event("startup")
+async def on_startup():
+    init_db()
 
 # Run the app
 if __name__ == "__main__":
