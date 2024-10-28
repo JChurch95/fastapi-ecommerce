@@ -6,8 +6,8 @@ class Product(Base, table=True):
     __tablename__ = "products"
     
     name: str
-    brand: str
-    price: int
+    brand_id: int = Field(foreign_key="brands.id")
+    price: float
     description: str
     subcategory_id: int = Field(foreign_key="subcategories.id")
     image_url: Optional[str] = None

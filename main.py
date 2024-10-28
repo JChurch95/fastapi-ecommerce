@@ -7,11 +7,13 @@ from db import get_session, init_db
 from models.categories import Category
 from models.subcategories import SubCategory
 from models.products import Product
+from models.brands import Brand
 
 app = FastAPI()
 
 origins = [
     "http://localhost",
+    "http://localhost:5173",
     "http://localhost:8000",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
@@ -32,13 +34,12 @@ app.mount("/media", StaticFiles(directory="media"), name="media")
 # Operations
 @app.get("/")
 def root():
-    return {"message": "Welcome to Mall Rats!"}
+    return {"message": "Snoochie Boochie Noochies!"}
 
-# Create
+# Generic CRUD operations remain the same
 def create_generic(model):
     def create(item: model, session: Session = Depends(get_session)):
         try:
-            # Exclude id field from the input data
             data = item.model_dump(exclude={'id'})
             db_item = model(**data)
             session.add(db_item)
@@ -54,13 +55,11 @@ def create_generic(model):
             )
     return create
 
-# Read
 def read_generic(model):
     def read(item_id: int, session: Session = Depends(get_session)):
         return session.get(model, item_id)
     return read
 
-# Update
 def update_generic(model):
     def update(item_id: int, item: model, session: Session = Depends(get_session)):
         db_item = session.get(model, item_id)
@@ -75,7 +74,6 @@ def update_generic(model):
         return {"error": f"{model.__name__} with id {item_id} not found"}
     return update
 
-# Delete
 def delete_generic(model):
     def delete(item_id: int, session: Session = Depends(get_session)):
         item = session.get(model, item_id)
@@ -88,10 +86,12 @@ def delete_generic(model):
 @app.get("/api/products/")
 async def get_products(category: str, db: Session = Depends(get_session)):
     try:
-        query = select(Product, SubCategory, Category).join(
+        query = select(Product, SubCategory, Category, Brand).join(
             SubCategory, Product.subcategory_id == SubCategory.id
         ).join(
             Category, SubCategory.category_id == Category.id
+        ).join(
+            Brand, Product.brand_id == Brand.id
         ).where(Category.name.ilike(f"%{category}%"))
         
         results = db.exec(query).all()
@@ -101,7 +101,8 @@ async def get_products(category: str, db: Session = Depends(get_session)):
         
         return [{
             "name": product.name,
-            "brand": product.brand,
+            "brand_id": product.brand_id,
+            "brand_name": brand.name,
             "price": product.price,
             "description": product.description,
             "image_url": product.image_url,
@@ -109,11 +110,22 @@ async def get_products(category: str, db: Session = Depends(get_session)):
             "rating_count": product.rating_count,
             "category_name": category.name,
             "subcategory_name": subcategory.name
-        } for product, subcategory, category in results]
+        } for product, subcategory, category, brand in results]
     except Exception as e:
         print(f"Error in get_products: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+@app.get("/api/brands/")
+async def get_brands(db: Session = Depends(get_session)):
+    try:
+        query = select(Brand)
+        results = db.exec(query).all()
+        return [{"id": brand.id, "name": brand.name} for brand in results]
+    except Exception as e:
+        print(f"Error in get_brands: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+# Existing routes remain the same
 @app.get("/api/categories/")
 async def get_categories(db: Session = Depends(get_session)):
     try:
@@ -158,6 +170,12 @@ app.post("/products/")(create_generic(Product))
 app.get("/products/{item_id}")(read_generic(Product))
 app.put("/products/{item_id}")(update_generic(Product))
 app.delete("/products/{item_id}")(delete_generic(Product))
+
+# Brands CRUD
+app.post("/brands/")(create_generic(Brand))
+app.get("/brands/{item_id}")(read_generic(Brand))
+app.put("/brands/{item_id}")(update_generic(Brand))
+app.delete("/brands/{item_id}")(delete_generic(Brand))
 
 # Initialize database
 @app.on_event("startup")

@@ -8,9 +8,10 @@ from db import DATABASE_URL
 from models.categories import Category
 from models.subcategories import SubCategory
 from models.products import Product
+from models.brands import Brand
 
 # Register models to ensure they are picked up by SQLModel metadata
-models = [Category, SubCategory, Product]  # Updated to include SubCategory
+models = [Category, SubCategory, Product, Brand]  # Updated to include Brand
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
