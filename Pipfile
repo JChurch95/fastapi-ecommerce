@@ -9,6 +9,7 @@ uvicorn = "*"
 psycopg2-binary = "*"
 sqlmodel = "*"
 alembic = "*"
+python-dotenv = "*"
 
 [dev-packages]
 
