@@ -28,8 +28,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount the media directory
-app.mount("/media", StaticFiles(directory="media"), name="media")
+# Mount the Media directory
+app.mount("/media", StaticFiles(directory="../crudco/media"), name="media")
 
 # Operations
 @app.get("/")

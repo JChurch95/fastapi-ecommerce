@@ -7,6 +7,7 @@ class Product(Base, table=True):
     
     name: str
     brand_id: int = Field(foreign_key="brands.id")
+    category_id: int = Field(foreign_key="categories.id")
     price: float
     description: str
     subcategory_id: int = Field(foreign_key="subcategories.id")
