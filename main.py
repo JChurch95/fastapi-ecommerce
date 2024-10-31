@@ -1,9 +1,12 @@
 import uvicorn
+from typing import Annotated
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import Field, Session, select, SQLModel
 from db import get_session, init_db
+
 from models.categories import Category
 from models.subcategories import SubCategory
 from models.products import Product
@@ -22,7 +25,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,6 +33,11 @@ app.add_middleware(
 
 # Mount the Media directory
 app.mount("/media", StaticFiles(directory="../crudco/media"), name="media")
+
+def check_current_session(credentials: Annotated[HTTPAuthorizationCredentials, Depends(HTTPBearer())]):
+   token = credentials.credentials
+
+
 
 # Operations
 @app.get("/")

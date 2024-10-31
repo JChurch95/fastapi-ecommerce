@@ -10,6 +10,7 @@ psycopg2-binary = "*"
 sqlmodel = "*"
 alembic = "*"
 python-dotenv = "*"
+pyjwt = "*"
 
 [dev-packages]
 
